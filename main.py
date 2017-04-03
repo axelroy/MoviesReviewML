@@ -5,10 +5,10 @@ def create_training_set_random(count):
     """Crée un set de test aléatoire afin d'entrainer le modèle, avec exemples du dataset complet.
        X étant passé en paramètre"""
 
-    neg_path = Path('./movies/neg')
+    neg_path = Path('./tagged/neg')
     list_negative_reviews = ([x for x in neg_path.iterdir()])
 
-    pos_path = Path('./movies/pos')
+    pos_path = Path('./tagged/pos')
     list_positive_reviews = ([x for x in pos_path.iterdir()])
 
     training_set = []
@@ -31,10 +31,10 @@ def create_training_set_fixed():
     """Crée un set de test fixe afin d'entrainer le modèle, avec exemples du dataset complet"""
     training_set = []
 
-    neg_path = Path('./movies/neg')
+    neg_path = Path('./tagged/neg')
     list_negative_reviews = [x for x in neg_path.iterdir()]
 
-    pos_path = Path('./movies/pos')
+    pos_path = Path('./tagged/pos')
     list_positive_reviews = [x for x in pos_path.iterdir()]
 
     positive_review_selection = list_positive_reviews[200:400]
@@ -46,6 +46,13 @@ def create_training_set_fixed():
 
     return training_set
 
+def preprocessing(list_selected_files):
+    for file_path in list_selected_files:
+        file = open(file_path.as_posix(), 'r')
+
+        for line in file.readline():
+            _, category, canon = tuple(line.split("\t"))
+            print(category, "(", canon , ")")
 
 def main():
     """
@@ -65,7 +72,8 @@ def main():
     """
     list_selected_files = create_training_set_random(200)
     # list_selected_files = create_training_set_fixed()
-    print('[%s]' % '\n '.join(map(str, list_selected_files)))
+    # print('[%s]' % '\n '.join(map(str, list_selected_files)))
+    preprocessing(list_selected_files)
 
 
 if __name__ == '__main__':
