@@ -1,9 +1,12 @@
 from pathlib import Path
 from shutil import copyfile
 from shutil import rmtree
+from os import makedirs
+from sklearn.feature_extraction.text import TfidfTransformer
+from sklearn.feature_extraction.text import CountVectorizer
 
 import random
-from os import makedirs
+import sklearn.datasets
 
 neg_path = Path('./tagged/neg')
 pos_path = Path('./tagged/pos')
@@ -182,7 +185,57 @@ def clean(files_to_clean):
 
 def load():
     global trainig_dir
-    sklearn.datasets.load_files(trainig_dir)
+
+    files = sklearn.datasets.load_files(trainig_dir)
+
+    return files
+
+def classify(datas):
+    count_vect = CountVectorizer()
+    X_train_counts = count_vect.fit_transform(datas.data)
+    X_train_counts.shape
+    count_vect.vocabulary_.get(u'algorithm')
+
+    tf_transformer = TfidfTransformer(use_idf=False).fit(X_train_counts)
+    X_train_tf = tf_transformer.transform(X_train_counts)
+    X_train_tf.shape
+
+
+    tfidf_transformer = TfidfTransformer()
+    X_train_tfidf = tfidf_transformer.fit_transform(X_train_counts)
+    X_train_tfidf.shape
+
+    # Training a classifier
+    from sklearn.naive_bayes import MultinomialNB
+    clf = MultinomialNB().fit(X_train_tfidf, datas.target)
+
+    validation_set = ['God is love', 'OpenGL on the GPU is fast']
+    X_new_counts = count_vect.transform(docs_new)
+    X_new_tfidf = tfidf_transformer.transform(X_new_counts)
+
+    predicted = clf.predict(X_new_tfidf)
+
+    for doc, category in zip(docs_new, predicted):
+        print('%r => %s' % (doc, datas.target_names[category]))
+
+    # Building pipeline
+    from sklearn.pipeline import Pipeline
+    text_clf = Pipeline([('vect', CountVectorizer()),
+                         ('tfidf', TfidfTransformer()),
+                         ('clf', MultinomialNB()),
+    ])
+
+    text_clf = text_clf.fit(datas.data, datas.target)
+
+    return text_clf
+
+def evaluate(classifier):
+    import numpy as np
+    
+    docs_test = datas.data
+    predicted = text_clf.predict(docs_test)
+    print("Classification via probabilité Bayessiene : ", np.mean(predicted == datas.target))
+
 
 def main():
     """
@@ -196,7 +249,9 @@ def main():
     list_training_files, list_validation_files = create_training_set_fixed()
     copy_files(list_training_files, list_validation_files)
     preprocessing()
-    # load()
+    datas = load(training)
+    classify(datas)
+    evaluate()
 
 
 if __name__ == '__main__':
