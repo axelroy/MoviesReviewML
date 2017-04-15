@@ -2,9 +2,14 @@ from pathlib import Path
 from shutil import copyfile
 from shutil import rmtree
 from os import makedirs
+
+from sklearn.pipeline import Pipeline
+from sklearn.naive_bayes import MultinomialNB
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.linear_model import SGDClassifier
 
+import numpy as np
 import random
 import sklearn.datasets
 
@@ -183,58 +188,68 @@ def clean(files_to_clean):
 
         open(file_path.as_posix(), 'w').writelines(list_allowed)
 
-def load():
+def load(dataset):
     global trainig_dir
+    global validation_dir
 
-    files = sklearn.datasets.load_files(trainig_dir)
+    from sklearn.datasets import load_files
+
+    if dataset == "training":
+        files = load_files(trainig_dir)
+        print(len(files.filenames))
+        print(files.target_names[files.target[0]])
+    else:
+        files = load_files(validation_dir)
 
     return files
 
-def classify(datas):
+def classify(training_datas):
+    # Creates a occurency matrix for the reviews, without preprocessing
     count_vect = CountVectorizer()
-    X_train_counts = count_vect.fit_transform(datas.data)
-    X_train_counts.shape
-    count_vect.vocabulary_.get(u'algorithm')
-
-    tf_transformer = TfidfTransformer(use_idf=False).fit(X_train_counts)
-    X_train_tf = tf_transformer.transform(X_train_counts)
-    X_train_tf.shape
+    X_train_counts = count_vect.fit_transform(training_datas.data)
 
 
+    # X_train_counts.shape
+    # count_vect.vocabulary_.get(u'algorithm')
+
+
+    # Converts into a inverse frequency matrix
     tfidf_transformer = TfidfTransformer()
     X_train_tfidf = tfidf_transformer.fit_transform(X_train_counts)
-    X_train_tfidf.shape
+    # X_train_tfidf.shape
 
     # Training a classifier
-    from sklearn.naive_bayes import MultinomialNB
-    clf = MultinomialNB().fit(X_train_tfidf, datas.target)
+    clf = MultinomialNB().fit(X_train_tfidf, training_datas.target)
 
-    validation_set = ['God is love', 'OpenGL on the GPU is fast']
-    X_new_counts = count_vect.transform(docs_new)
-    X_new_tfidf = tfidf_transformer.transform(X_new_counts)
-
-    predicted = clf.predict(X_new_tfidf)
-
-    for doc, category in zip(docs_new, predicted):
-        print('%r => %s' % (doc, datas.target_names[category]))
+    # Load the validation set
+    validation_set = load("validation")
 
     # Building pipeline
-    from sklearn.pipeline import Pipeline
-    text_clf = Pipeline([('vect', CountVectorizer()),
+    text_clf_NB = Pipeline([('vect', CountVectorizer()),
                          ('tfidf', TfidfTransformer()),
                          ('clf', MultinomialNB()),
     ])
 
-    text_clf = text_clf.fit(datas.data, datas.target)
+    text_clf_SGDC = Pipeline([('vect', CountVectorizer()),
+                         ('tfidf', TfidfTransformer()),
+                         ('clf', SGDClassifier(loss='hinge', penalty='l2', alpha=1e-3, n_iter=5, random_state=42)),
+    ])
 
-    return text_clf
+    text_clf_NB = text_clf_NB.fit(training_datas.data, training_datas.target)
+    _ = text_clf_SGDC.fit(training_datas.data, training_datas.target)
 
-def evaluate(classifier):
-    import numpy as np
-    
-    docs_test = datas.data
-    predicted = text_clf.predict(docs_test)
-    print("Classification via probabilité Bayessiene : ", np.mean(predicted == datas.target))
+    # Predictions with both models
+    predicted_NB = text_clf_NB.predict(validation_set.data)
+    predicted_SGDC = text_clf_SGDC.predict(validation_set.data)
+
+    print("\nPrediction accuracies :")
+    print("\tNaïve Bayes prediction \t : {0}".format(np.mean(predicted_NB == validation_set.target)))
+    print("\tSVM prediction \t\t : {0}".format(np.mean(predicted_SGDC == validation_set.target)))
+
+    return text_clf_NB
+
+# def evaluate(classifier_pipeline):
+    # print(classifier_pipeline)
 
 
 def main():
@@ -246,12 +261,13 @@ def main():
         PARAMETERS
             None
     """
+    # list_training_files, list_validation_files = create_training_set_random(800)
     list_training_files, list_validation_files = create_training_set_fixed()
     copy_files(list_training_files, list_validation_files)
     preprocessing()
-    datas = load(training)
-    classify(datas)
-    evaluate()
+    datas = load("training")
+    classifier_pipeline = classify(datas)
+    # evaluate(classifier_pipeline)
 
 
 if __name__ == '__main__':
