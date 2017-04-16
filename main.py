@@ -8,6 +8,11 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.linear_model import SGDClassifier
+from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import train_test_split
+import numpy as np
+
+from tpot import TPOTClassifier
 
 import numpy as np
 import random
@@ -138,12 +143,12 @@ def preprocessing():
 
     files_to_clean = []
 
-    # Cleaning the training datas
+    # Cleaning the training data
     path = Path(trainig_dir)
     files_to_clean = collect_files_path(path)
     clean(files_to_clean)
 
-    # Cleaning the training datas
+    # Cleaning the training data
     path = Path(validation_dir)
     files_to_clean = collect_files_path(path)
     clean(files_to_clean)
@@ -151,7 +156,7 @@ def preprocessing():
 def collect_files_path(path):
     """ Tries to parse the given path directory and parse it. The given directory
         must contain a directory for each classes, and each category contains a
-        list of txt datas to process. """
+        list of txt data to process. """
     files_to_clean = []
 
     dir_classes_collection = ([x for x in path.iterdir() if x.is_dir()])
@@ -203,15 +208,10 @@ def load(dataset):
 
     return files
 
-def classify(training_datas):
+def classify(training_data):
     # Creates a occurency matrix for the reviews, without preprocessing
     count_vect = CountVectorizer()
-    X_train_counts = count_vect.fit_transform(training_datas.data)
-
-
-    # X_train_counts.shape
-    # count_vect.vocabulary_.get(u'algorithm')
-
+    X_train_counts = count_vect.fit_transform(training_data.data)
 
     # Converts into a inverse frequency matrix
     tfidf_transformer = TfidfTransformer()
@@ -219,7 +219,7 @@ def classify(training_datas):
     # X_train_tfidf.shape
 
     # Training a classifier
-    clf = MultinomialNB().fit(X_train_tfidf, training_datas.target)
+    clf = MultinomialNB().fit(X_train_tfidf, training_data.target)
 
     # Load the validation set
     validation_set = load("validation")
@@ -235,8 +235,8 @@ def classify(training_datas):
                          ('clf', SGDClassifier(loss='hinge', penalty='l2', alpha=1e-3, n_iter=5, random_state=42)),
     ])
 
-    text_clf_NB = text_clf_NB.fit(training_datas.data, training_datas.target)
-    _ = text_clf_SGDC.fit(training_datas.data, training_datas.target)
+    text_clf_NB = text_clf_NB.fit(training_data.data, training_data.target)
+    _ = text_clf_SGDC.fit(training_data.data, training_data.target)
 
     # Predictions with both models
     predicted_NB = text_clf_NB.predict(validation_set.data)
@@ -246,10 +246,57 @@ def classify(training_datas):
     print("\tNaïve Bayes prediction \t : {0}".format(np.mean(predicted_NB == validation_set.target)))
     print("\tSVM prediction \t\t : {0}".format(np.mean(predicted_SGDC == validation_set.target)))
 
+    # Possible parameters
+    parameters = {'vect__ngram_range': [(1, 1), (1, 2)],
+    'tfidf__use_idf': (True, False),
+    'clf__alpha': (1e-2, 1e-3),
+    }
+
+    gs_clf = GridSearchCV(text_clf_SGDC, parameters, n_jobs=-1) # Use all cores
+
+    # Try fit on a subset of data
+    gs_clf = gs_clf.fit(training_data.data, training_data.target)
+
+    demoString = 'moche'
+
+    print("\nThe demo prediction for \"{0}\" is : {1}".format(demoString, training_data.target_names[gs_clf.predict([demoString])[0]]))
+
+    print("\nThe best score with SVM is {0}".format(gs_clf.best_score_))
+    print("\nFound with the following parameters :\n")
+    for param_name in sorted(parameters.keys()):
+        print("\t%s: %r" % (param_name, gs_clf.best_params_[param_name]))
+
     return text_clf_NB
+
+# def parameter_optimisation():
 
 # def evaluate(classifier_pipeline):
     # print(classifier_pipeline)
+
+def TPOT_training():
+    training_data = load("training")
+    validation_data = load("validation")
+
+    count_vect = CountVectorizer()
+    X_train_counts = count_vect.fit_transform(training_data.data)
+    tfidf_transformer = TfidfTransformer()
+
+    X_validation_counts = count_vect.fit_transform(training_data.data)
+    X_validation = tfidf_transformer.fit_transform(X_validation_counts)
+
+    # training_data = np.array(training_data)
+    # validation_data = np.array(validation_data)
+
+
+    X_train = tfidf_transformer.fit_transform(X_train_counts)
+    X_test = X_validation
+    y_train = training_data.target
+    y_test = validation_data.target
+
+    tpot = TPOTClassifier(generations=5, population_size=50, verbosity=2)
+    tpot.fit(X_train, y_train)
+    # print(tpot.score(X_test, y_test))
+    tpot.export('tpot_pipeline.py')
 
 
 def main():
@@ -265,9 +312,10 @@ def main():
     list_training_files, list_validation_files = create_training_set_fixed()
     copy_files(list_training_files, list_validation_files)
     preprocessing()
-    datas = load("training")
-    classifier_pipeline = classify(datas)
-    # evaluate(classifier_pipeline)
+    data = load("training")
+    classifier_pipeline = classify(data)
+
+    TPOT_training()
 
 
 if __name__ == '__main__':
