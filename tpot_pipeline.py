@@ -12,8 +12,8 @@ training_features, testing_features, training_classes, testing_classes = \
     train_test_split(features, tpot_data['class'], random_state=42)
 
 exported_pipeline = make_pipeline(
-    SelectPercentile(score_func=f_classif, percentile=67),
-    BernoulliNB(fit_prior=True)
+    SelectPercentile(score_func=f_classif, percentile=36),
+    BernoulliNB(alpha=1.0, fit_prior=False)
 )
 
 exported_pipeline.fit(training_features, training_classes)

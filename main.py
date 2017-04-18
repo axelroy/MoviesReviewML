@@ -284,10 +284,6 @@ def TPOT_training():
     X_validation_counts = count_vect.fit_transform(training_data.data)
     X_validation = tfidf_transformer.fit_transform(X_validation_counts)
 
-    # training_data = np.array(training_data)
-    # validation_data = np.array(validation_data)
-
-
     X_train = tfidf_transformer.fit_transform(X_train_counts)
     X_test = X_validation
     y_train = training_data.target
@@ -295,6 +291,7 @@ def TPOT_training():
 
     tpot = TPOTClassifier(generations=5, population_size=50, verbosity=2)
     tpot.fit(X_train, y_train)
+    
     # print(tpot.score(X_test, y_test))
     tpot.export('tpot_pipeline.py')
 
