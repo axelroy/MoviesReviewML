@@ -32,9 +32,9 @@ negative_directory_validation = validation_dir + 'neg/'
 
 allowed_categories = ["VER", "ADJ", "NOM", "ADV"]
 
-def create_training_set_random(count):
-    """Crée un set de test aléatoire afin d'entrainer le modèle, avec exemples du dataset complet.
-       X étant passé en paramètre"""
+def create_training_set_random(training_percent):
+    """Creates random training and validation subset in order to train and validate
+       the model parameters"""
 
     neg_path = Path('./tagged/neg')
     list_negative_reviews = ([x for x in neg_path.iterdir()])
@@ -45,6 +45,10 @@ def create_training_set_random(count):
     training_set = []
     validation_set = []
 
+    count = len(list_negative_reviews)
+    count = int(count * training_percent / 100)
+
+    # We add count files to the
     for _ in range(0,count):
         # Liste négative
         selected_item = random.choice(list_negative_reviews)
@@ -62,9 +66,9 @@ def create_training_set_random(count):
     return training_set, validation_set
 
 def create_training_set_fixed():
-    """Create a fixed training dataset and validation set. The files names might
-       not be consequentives, but they are always the same. Made to test the
-       performances of the models."""
+    """ Create a fixed training dataset and validation set. The files names might
+        not be consequentives, but they are always the same. Made to test the
+        performances of the models."""
     training_set = []
     validation_set = []
 
@@ -75,15 +79,15 @@ def create_training_set_fixed():
     list_positive_reviews = [x for x in pos_path.iterdir()]
 
     # Insertion dans le validation set de 80% fixe du dataset
-    validation_set[0:0] = list_positive_reviews[0:200]
-    validation_set[0:0] = list_negative_reviews[0:200]
+    training_set[0:0] = list_positive_reviews[0:200]
+    training_set[0:0] = list_negative_reviews[0:200]
 
     # Insertion dans le training set de 20% du dataset
-    training_set[0:0] = list_positive_reviews[200:400]
-    training_set[0:0] = list_negative_reviews[200:400]
+    validation_set[0:0] = list_positive_reviews[200:400]
+    validation_set[0:0] = list_negative_reviews[200:400]
 
-    validation_set[0:0] = list_positive_reviews[400:1000]
-    validation_set[0:0] = list_negative_reviews[400:1000]
+    training_set[0:0] = list_positive_reviews[400:1000]
+    training_set[0:0] = list_negative_reviews[400:1000]
 
     return training_set, validation_set
 
@@ -103,7 +107,7 @@ def copy_files(list_training_files, list_validation_files):
 
     # copying the files
     for file_path in list_training_files:
-        print(file_path.as_posix())
+        # print(file_path.as_posix())
         if 'pos' in file_path.as_posix():
             copyfile(file_path.as_posix(), positive_directory_training + file_path.name)
         else:
@@ -148,7 +152,7 @@ def preprocessing():
     files_to_clean = collect_files_path(path)
     clean(files_to_clean)
 
-    # Cleaning the training data
+    # Cleaning the validation data
     path = Path(validation_dir)
     files_to_clean = collect_files_path(path)
     clean(files_to_clean)
@@ -187,7 +191,10 @@ def clean(files_to_clean):
                     category = category.split(":")[0]
 
                 if category in allowed_categories:
-                    list_allowed.append(canon + "\r\n")
+                    list_canon = canon.split("|")
+                    for word in list_canon:
+                        list_allowed.append(word.lower() + " ")
+
             except (ValueError):
                 print('ERROR : BAD VALUE FORMAT : file : ', file_path, 'line ', line)
 
@@ -201,14 +208,15 @@ def load(dataset):
 
     if dataset == "training":
         files = load_files(trainig_dir)
-        print(len(files.filenames))
-        print(files.target_names[files.target[0]])
     else:
         files = load_files(validation_dir)
 
     return files
 
 def classify(training_data):
+    """ Tries to vectorize the document, normalize then and then predict
+        trains the model, optimize parameters and then validate the model"""
+
     # Creates a occurency matrix for the reviews, without preprocessing
     count_vect = CountVectorizer()
     X_train_counts = count_vect.fit_transform(training_data.data)
@@ -216,7 +224,7 @@ def classify(training_data):
     # Converts into a inverse frequency matrix
     tfidf_transformer = TfidfTransformer()
     X_train_tfidf = tfidf_transformer.fit_transform(X_train_counts)
-    # X_train_tfidf.shape
+    X_train_tfidf.shape
 
     # Training a classifier
     clf = MultinomialNB().fit(X_train_tfidf, training_data.target)
@@ -226,13 +234,13 @@ def classify(training_data):
 
     # Building pipeline
     text_clf_NB = Pipeline([('vect', CountVectorizer()),
-                         ('tfidf', TfidfTransformer()),
-                         ('clf', MultinomialNB()),
+                            ('tfidf', TfidfTransformer()),
+                            ('clf', MultinomialNB()),
     ])
 
     text_clf_SGDC = Pipeline([('vect', CountVectorizer()),
-                         ('tfidf', TfidfTransformer()),
-                         ('clf', SGDClassifier(loss='hinge', penalty='l2', alpha=1e-3, n_iter=5, random_state=42)),
+                              ('tfidf', TfidfTransformer()),
+                              ('clf', SGDClassifier(loss='hinge', penalty='l2', alpha=1e-3, n_iter=5, random_state=42)),
     ])
 
     text_clf_NB = text_clf_NB.fit(training_data.data, training_data.target)
@@ -247,9 +255,9 @@ def classify(training_data):
     print("\tSVM prediction \t\t : {0}".format(np.mean(predicted_SGDC == validation_set.target)))
 
     # Possible parameters
-    parameters = {'vect__ngram_range': [(1, 1), (1, 2)],
-    'tfidf__use_idf': (True, False),
-    'clf__alpha': (1e-2, 1e-3),
+    parameters = {'vect__ngram_range': [(1, 1), (1, 2), (1, 3)],
+                  'tfidf__use_idf': (True, False),
+                  'clf__alpha': (1e-2, 1e-5),
     }
 
     gs_clf = GridSearchCV(text_clf_SGDC, parameters, n_jobs=-1) # Use all cores
@@ -257,7 +265,7 @@ def classify(training_data):
     # Try fit on a subset of data
     gs_clf = gs_clf.fit(training_data.data, training_data.target)
 
-    demoString = 'moche'
+    demoString = 'un agréable moment'
 
     print("\nThe demo prediction for \"{0}\" is : {1}".format(demoString, training_data.target_names[gs_clf.predict([demoString])[0]]))
 
@@ -268,19 +276,20 @@ def classify(training_data):
 
     return text_clf_NB
 
-# def parameter_optimisation():
-
-# def evaluate(classifier_pipeline):
-    # print(classifier_pipeline)
-
 def TPOT_training():
+    """Trying pipeline optimisation with the full automatic pipeline
+       optimisation TPOT utilities."""
+
+    # Loading both datasets
     training_data = load("training")
     validation_data = load("validation")
 
+    # Vectorize the text datas
     count_vect = CountVectorizer()
     X_train_counts = count_vect.fit_transform(training_data.data)
-    tfidf_transformer = TfidfTransformer()
 
+    # Conversion to term-frequency times inverse document-frequency
+    tfidf_transformer = TfidfTransformer()
     X_validation_counts = count_vect.fit_transform(training_data.data)
     X_validation = tfidf_transformer.fit_transform(X_validation_counts)
 
@@ -291,10 +300,9 @@ def TPOT_training():
 
     tpot = TPOTClassifier(generations=5, population_size=50, verbosity=2)
     tpot.fit(X_train, y_train)
-    
-    # print(tpot.score(X_test, y_test))
-    tpot.export('tpot_pipeline.py')
 
+    print(tpot.score(X_test, y_test))
+    # tpot.export('tpot_pipeline.py')
 
 def main():
     """
@@ -305,15 +313,14 @@ def main():
         PARAMETERS
             None
     """
-    # list_training_files, list_validation_files = create_training_set_random(800)
+    # list_training_files, list_validation_files = create_training_set_random(80)
     list_training_files, list_validation_files = create_training_set_fixed()
     copy_files(list_training_files, list_validation_files)
     preprocessing()
     data = load("training")
     classifier_pipeline = classify(data)
 
-    TPOT_training()
-
+    # TPOT_training()
 
 if __name__ == '__main__':
     main()
