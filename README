@@ -1,2 +1,40 @@
-# Travail de classification sur un échantillon de critiques du film avatar
+Auteurs                      : Axel Roy
+Date dernière modification   : 21 Avril 2017
+But                          : Implémentation en machine learning d'un classificateur
+                               de revues de film
 
+
+***********************************************************************************
+                                    Utilisation
+***********************************************************************************
+Ce script a été développé sous Linux puis adapté sous Windows.
+!! Sous Windows, l'installation de scipy peut être très problématique,
+se reporter à la page suivante : https://www.scipy.org/install.html
+
+le script se lance via python main.py.
+
+Le fichier requierements.txt contient les dépendances, que l'on peut installer
+via la commande pip install -r requierements.txt.
+
+***********************************************************************************
+                                    Implémentation
+***********************************************************************************
+Le script s'occupe de supprimer les dossiers training et validation, puis de sélectionner
+aléatoirement x% du dataset dans chacun de ces répertoires, x étant configuré de base à
+80% pour le training et 20% pour la validation.
+
+Puis on build deux pipeline appropriés au traitement de texte :
+* Vectorisation via un bag of word puis une transformation de la matrice de compte
+  en matrice de fréquence inversée.
+* Entrainement des modèles Naive Bayesian et SVM
+* Prédiction de la validité de la classification
+* Recherche d'optimisation des paramétres via GridSearchCV
+
+Et en supplément, une tentative d'optimisation automatique du pipeline
+(feature selection, model selection, hyperparameters selection et parameters selection).
+
+Cette section est laissée en commentaires afin de ne pas faire durer trop l'exécution,
+mais est utilisée dans le cadre du travail de Bachelor.
+
+Il ne fournit pas de classification d'un meilleur ordre car les algorithmes liés
+au traitement de texte ne sont pas encore implémentés.
