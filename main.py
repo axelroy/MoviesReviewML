@@ -12,8 +12,6 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import train_test_split
 import numpy as np
 
-from tpot import TPOTClassifier
-
 import numpy as np
 import random
 import sklearn.datasets
@@ -35,6 +33,7 @@ allowed_categories = ["VER", "ADJ", "NOM", "ADV"]
 def create_training_set_random(training_percent):
     """Creates random training and validation subset in order to train and validate
        the model parameters"""
+    print("Début de la sélection aléatoire des fichiers")
 
     neg_path = Path('./tagged/neg')
     list_negative_reviews = ([x for x in neg_path.iterdir()])
@@ -63,12 +62,15 @@ def create_training_set_random(training_percent):
     validation_set[0:0] = list_negative_reviews
     validation_set[0:0] = list_positive_reviews
 
+    print("Fin de la sélection aléatoire des fichiers")
     return training_set, validation_set
 
 def create_training_set_fixed():
     """ Create a fixed training dataset and validation set. The files names might
         not be consequentives, but they are always the same. Made to test the
         performances of the models."""
+
+    print("Création du set de données fixes")
     training_set = []
     validation_set = []
 
@@ -89,6 +91,8 @@ def create_training_set_fixed():
     training_set[0:0] = list_positive_reviews[400:1000]
     training_set[0:0] = list_negative_reviews[400:1000]
 
+    print("Fin de la création du set fixe")
+
     return training_set, validation_set
 
 def copy_files(list_training_files, list_validation_files):
@@ -101,6 +105,8 @@ def copy_files(list_training_files, list_validation_files):
     global positive_directory_validation
     global negative_directory_training
     global negative_directory_validation
+
+    print("Début de la copie des fichiers")
 
     # Deleting and creating the directories tree
     create_directories()
@@ -119,6 +125,8 @@ def copy_files(list_training_files, list_validation_files):
         else:
             copyfile(file_path.as_posix(), negative_directory_validation + file_path.name)
 
+    print("Fin de la copie des fichiers")
+
 def create_directories():
     """ Erases without question the training and validation directories"""
     global positive_directory_training
@@ -126,6 +134,7 @@ def create_directories():
     global negative_directory_training
     global negative_directory_validation
 
+    print("Suppression de répertoires :")
     # Temporaire
     try:
         rmtree(negative_directory_training)
@@ -140,8 +149,15 @@ def create_directories():
     makedirs(positive_directory_validation)
     makedirs(negative_directory_validation)
 
+    print("Répertoires de trainings supprimés et recrées :")
+    print(positive_directory_validation)
+    print(negative_directory_validation)
+    print(positive_directory_training)
+    print(negative_directory_training)
+
 def preprocessing():
     """ Retains only the pertinent keywords to classify our reviews"""
+    print("Début du prétraitement des données afin de ne conserver que les mots intéressants")
     global trainig_dir
     global validation_dir
 
@@ -156,6 +172,8 @@ def preprocessing():
     path = Path(validation_dir)
     files_to_clean = collect_files_path(path)
     clean(files_to_clean)
+
+    print("Fin du prétraitement des données")
 
 def collect_files_path(path):
     """ Tries to parse the given path directory and parse it. The given directory
@@ -172,33 +190,36 @@ def collect_files_path(path):
 
     return files_to_clean
 
-
 def clean(files_to_clean):
     """ Deleting all the categories that are not in the allowed_categories in all the
         files listes in the list of files. The list must be a Path() list"""
     global allowed_categories
 
     for file_path in files_to_clean:
-        lines = open(file_path.as_posix()).readlines()
-        list_allowed = []
+        print("Fichier parcouru : ", file_path.as_posix())
+        try:
+            lines = open(file_path.as_posix(), encoding='utf8').readlines()
+            list_allowed = []
 
-        for i, line in enumerate(lines[:]):
-            try:
-                line = line.rstrip('\r\n')
-                _, category, canon = tuple(line.split("\t", maxsplit = 2))
+            for i, line in enumerate(lines[:]):
+                try:
+                    line = line.rstrip('\r\n')
+                    _, category, canon = tuple(line.split("\t", maxsplit = 2))
 
-                if ":" in category:
-                    category = category.split(":")[0]
+                    if ":" in category:
+                        category = category.split(":")[0]
 
-                if category in allowed_categories:
-                    list_canon = canon.split("|")
-                    for word in list_canon:
-                        list_allowed.append(word.lower() + " ")
+                    if category in allowed_categories:
+                        list_canon = canon.split("|")
+                        for word in list_canon:
+                            list_allowed.append(word.lower() + " ")
 
-            except (ValueError):
-                print('ERROR : BAD VALUE FORMAT : file : ', file_path, 'line ', line)
+                except (ValueError):
+                    print('ERROR : BAD VALUE FORMAT : file : ', file_path, 'line ', line)
 
-        open(file_path.as_posix(), 'w').writelines(list_allowed)
+            open(file_path.as_posix(), 'w', encoding='utf8').writelines(list_allowed)
+        except:
+            print("Erreur lors de l'ouverture du fichier", file_path.as_posix())
 
 def load(dataset):
     global trainig_dir
@@ -265,10 +286,6 @@ def classify(training_data):
     # Try fit on a subset of data
     gs_clf = gs_clf.fit(training_data.data, training_data.target)
 
-    demoString = 'un agréable moment'
-
-    print("\nThe demo prediction for \"{0}\" is : {1}".format(demoString, training_data.target_names[gs_clf.predict([demoString])[0]]))
-
     print("\nThe best score with SVM is {0}".format(gs_clf.best_score_))
     print("\nFound with the following parameters :\n")
     for param_name in sorted(parameters.keys()):
@@ -276,33 +293,33 @@ def classify(training_data):
 
     return text_clf_NB
 
-def TPOT_training():
-    """Trying pipeline optimisation with the full automatic pipeline
-       optimisation TPOT utilities."""
-
-    # Loading both datasets
-    training_data = load("training")
-    validation_data = load("validation")
-
-    # Vectorize the text datas
-    count_vect = CountVectorizer()
-    X_train_counts = count_vect.fit_transform(training_data.data)
-
-    # Conversion to term-frequency times inverse document-frequency
-    tfidf_transformer = TfidfTransformer()
-    X_validation_counts = count_vect.fit_transform(training_data.data)
-    X_validation = tfidf_transformer.fit_transform(X_validation_counts)
-
-    X_train = tfidf_transformer.fit_transform(X_train_counts)
-    X_test = X_validation
-    y_train = training_data.target
-    y_test = validation_data.target
-
-    tpot = TPOTClassifier(generations=5, population_size=50, verbosity=2)
-    tpot.fit(X_train, y_train)
-
-    print(tpot.score(X_test, y_test))
-    # tpot.export('tpot_pipeline.py')
+# def TPOT_training():
+#     """Trying pipeline optimisation with the full automatic pipeline
+#        optimisation TPOT utilities."""
+#
+#     # Loading both datasets
+#     training_data = load("training")
+#     validation_data = load("validation")
+#
+#     # Vectorize the text datas
+#     count_vect = CountVectorizer()
+#     X_train_counts = count_vect.fit_transform(training_data.data)
+#
+#     # Conversion to term-frequency times inverse document-frequency
+#     tfidf_transformer = TfidfTransformer()
+#     X_validation_counts = count_vect.fit_transform(training_data.data)
+#     X_validation = tfidf_transformer.fit_transform(X_validation_counts)
+#
+#     X_train = tfidf_transformer.fit_transform(X_train_counts)
+#     X_test = X_validation
+#     y_train = training_data.target
+#     y_test = validation_data.target
+#
+#     tpot = TPOTClassifier(generations=5, population_size=50, verbosity=2)
+#     tpot.fit(X_train, y_train)
+#
+#     print(tpot.score(X_test, y_test))
+#     # tpot.export('tpot_pipeline.py')
 
 def main():
     """
