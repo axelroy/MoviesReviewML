@@ -1,3 +1,46 @@
+"""
+    Auteurs                      : Axel Roy
+    Date dernière modification   : 21 Avril 2017
+    But                          : Implémentation en machine learning d'un classificateur
+                                   de revues de film
+
+
+    ***********************************************************************************
+                                        Utilisation
+    ***********************************************************************************
+    Ce script a été développé sous Linux puis adapté sous Windows.
+    !! Sous Windows, l'installation de scipy peut être très problématique,
+    se reporter à la page suivante : https://www.scipy.org/install.html
+
+    le script se lance via python main.py.
+
+    Le fichier requierements.txt contient les dépendances, que l'on peut installer
+    via la commande pip install -r requierements.txt.
+
+    ***********************************************************************************
+                                        Implémentation
+    ***********************************************************************************
+    Le script s'occupe de supprimer les dossiers training et validation, puis de sélectionner
+    aléatoirement x% du dataset dans chacun de ces répertoires, x étant configuré de base à
+    80% pour le training et 20% pour la validation.
+
+    Puis on build deux pipeline appropriés au traitement de texte :
+    * Vectorisation via un bag of word puis une transformation de la matrice de compte
+      en matrice de fréquence inversée.
+    * Entrainement des modèles Naive Bayesian et SVM
+    * Prédiction de la validité de la classification
+    * Recherche d'optimisation des paramétres via GridSearchCV
+
+    Et en supplément, une tentative d'optimisation automatique du pipeline
+    (feature selection, model selection, hyperparameters selection et parameters selection).
+
+    Cette section est laissée en commentaires afin de ne pas faire durer trop l'exécution,
+    mais est utilisée dans le cadre du travail de Bachelor.
+
+    Il ne fournit pas de classification d'un meilleur ordre car les algorithmes liés
+    au traitement de texte ne sont pas encore implémentés.
+"""
+
 from pathlib import Path
 from shutil import copyfile
 from shutil import rmtree
@@ -32,8 +75,11 @@ allowed_categories = ["VER", "ADJ", "NOM", "ADV"]
 
 def create_training_set_random(training_percent):
     """Creates random training and validation subset in order to train and validate
-       the model parameters"""
-    print("Début de la sélection aléatoire des fichiers")
+       the model parameters.
+       The parameter is the percentage of the files that will
+       go into the training set.
+       Output : A list of training file, a list of validation file"""
+       print("Debut de la selection aleatoire des fichiers")
 
     neg_path = Path('./tagged/neg')
     list_negative_reviews = ([x for x in neg_path.iterdir()])
@@ -47,14 +93,14 @@ def create_training_set_random(training_percent):
     count = len(list_negative_reviews)
     count = int(count * training_percent / 100)
 
-    # We add count files to the
+    # We add both to the positive and negative list the files into the training set,
+    # and every file that hasn't been added to the training set will go into the
+    # validation set
     for _ in range(0,count):
-        # Liste négative
         selected_item = random.choice(list_negative_reviews)
         training_set.append(selected_item)
         list_negative_reviews.remove(selected_item)
 
-        # Liste positive
         selected_item = random.choice(list_positive_reviews)
         training_set.append(selected_item)
         list_positive_reviews.remove(selected_item)
@@ -62,7 +108,7 @@ def create_training_set_random(training_percent):
     validation_set[0:0] = list_negative_reviews
     validation_set[0:0] = list_positive_reviews
 
-    print("Fin de la sélection aléatoire des fichiers")
+    print("Fin de la selection aleatoire des fichiers")
     return training_set, validation_set
 
 def create_training_set_fixed():
@@ -70,14 +116,11 @@ def create_training_set_fixed():
         not be consequentives, but they are always the same. Made to test the
         performances of the models."""
 
-    print("Création du set de données fixes")
+    print("Creation du set de donnees fixes")
     training_set = []
     validation_set = []
 
-    global neg_path
     list_negative_reviews = [x for x in neg_path.iterdir()]
-
-    global pos_path
     list_positive_reviews = [x for x in pos_path.iterdir()]
 
     # Insertion dans le validation set de 80% fixe du dataset
@@ -91,22 +134,14 @@ def create_training_set_fixed():
     training_set[0:0] = list_positive_reviews[400:1000]
     training_set[0:0] = list_negative_reviews[400:1000]
 
-    print("Fin de la création du set fixe")
+    print("Fin de la creation du set fixe")
 
     return training_set, validation_set
 
 def copy_files(list_training_files, list_validation_files):
     """Copies the chosen files from the tagged directory to the training and
        validation directory"""
-    global trainig_dir
-    global validation_dir
-
-    global positive_directory_training
-    global positive_directory_validation
-    global negative_directory_training
-    global negative_directory_validation
-
-    print("Début de la copie des fichiers")
+    print("Debut de la copie des fichiers")
 
     # Deleting and creating the directories tree
     create_directories()
@@ -134,7 +169,7 @@ def create_directories():
     global negative_directory_training
     global negative_directory_validation
 
-    print("Suppression de répertoires :")
+    print("Suppression de repertoires :")
     # Temporaire
     try:
         rmtree(negative_directory_training)
@@ -142,14 +177,14 @@ def create_directories():
         rmtree(negative_directory_validation)
         rmtree(positive_directory_validation)
     except:
-        print("Directories will be created")
+        print("Les repertoires n'existaient pas.")
 
     makedirs(positive_directory_training)
     makedirs(negative_directory_training)
     makedirs(positive_directory_validation)
     makedirs(negative_directory_validation)
 
-    print("Répertoires de trainings supprimés et recrées :")
+    print("Repertoires de trainings supprimés et recrees :")
     print(positive_directory_validation)
     print(negative_directory_validation)
     print(positive_directory_training)
@@ -157,7 +192,7 @@ def create_directories():
 
 def preprocessing():
     """ Retains only the pertinent keywords to classify our reviews"""
-    print("Début du prétraitement des données afin de ne conserver que les mots intéressants")
+    print("Debut du pretraitement des donnees afin de ne conserver que les mots interessants")
     global trainig_dir
     global validation_dir
 
@@ -173,14 +208,13 @@ def preprocessing():
     files_to_clean = collect_files_path(path)
     clean(files_to_clean)
 
-    print("Fin du prétraitement des données")
+    print("Fin du pretraitement des donnees")
 
 def collect_files_path(path):
     """ Tries to parse the given path directory and parse it. The given directory
         must contain a directory for each classes, and each category contains a
         list of txt data to process. """
     files_to_clean = []
-
     dir_classes_collection = ([x for x in path.iterdir() if x.is_dir()])
 
     for directory in dir_classes_collection:
@@ -196,7 +230,6 @@ def clean(files_to_clean):
     global allowed_categories
 
     for file_path in files_to_clean:
-        print("Fichier parcouru : ", file_path.as_posix())
         try:
             lines = open(file_path.as_posix(), encoding='utf8').readlines()
             list_allowed = []
@@ -237,19 +270,6 @@ def load(dataset):
 def classify(training_data):
     """ Tries to vectorize the document, normalize then and then predict
         trains the model, optimize parameters and then validate the model"""
-
-    # Creates a occurency matrix for the reviews, without preprocessing
-    count_vect = CountVectorizer()
-    X_train_counts = count_vect.fit_transform(training_data.data)
-
-    # Converts into a inverse frequency matrix
-    tfidf_transformer = TfidfTransformer()
-    X_train_tfidf = tfidf_transformer.fit_transform(X_train_counts)
-    X_train_tfidf.shape
-
-    # Training a classifier
-    clf = MultinomialNB().fit(X_train_tfidf, training_data.target)
-
     # Load the validation set
     validation_set = load("validation")
 
@@ -293,6 +313,26 @@ def classify(training_data):
 
     return text_clf_NB
 
+def main():
+    """
+        NAME
+            Review Classification : Classifies the reviews with scikit learn.
+        SYNOPSIS
+            python main.py
+        PARAMETERS
+            None
+    """
+    list_training_files, list_validation_files = create_training_set_random(80)
+    # list_training_files, list_validation_files = create_training_set_fixed()
+    copy_files(list_training_files, list_validation_files)
+    preprocessing()
+    data = load("training")
+    classifier_pipeline = classify(data)
+
+    # TPOT_training()
+
+# Optimisation du pipeline via un algorithme génétique. Intéressant, mais fonctionne
+# sous Linux, donc mis en commentaires pour le rendu
 # def TPOT_training():
 #     """Trying pipeline optimisation with the full automatic pipeline
 #        optimisation TPOT utilities."""
@@ -320,24 +360,6 @@ def classify(training_data):
 #
 #     print(tpot.score(X_test, y_test))
 #     # tpot.export('tpot_pipeline.py')
-
-def main():
-    """
-        NAME
-            Review Classification : Classifies the reviews with scikit learn.
-        SYNOPSIS
-            python main.py
-        PARAMETERS
-            None
-    """
-    # list_training_files, list_validation_files = create_training_set_random(80)
-    list_training_files, list_validation_files = create_training_set_fixed()
-    copy_files(list_training_files, list_validation_files)
-    preprocessing()
-    data = load("training")
-    classifier_pipeline = classify(data)
-
-    # TPOT_training()
 
 if __name__ == '__main__':
     main()
